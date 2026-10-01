@@ -1,0 +1,31 @@
+# Data: raw Kaggle files and the DuckDB database are rebuilt locally (see README)
+data/
+*.duckdb
+*.duckdb.wal
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+kaggle.json
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# C# / .NET build output
+bin/
+obj/
+TestResults/
+*.user
+.vs/
+
+# Editor and OS
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
