@@ -122,9 +122,15 @@ pipeline/
 
 Pipeline rules:
 
-- Each step uses `CREATE OR REPLACE` so it can be re-run safely.
+- The pipeline is incremental and idempotent: each run processes only what is new, and running it twice changes nothing the second time.
+  - bronze: append per new file. `bronze.load_log` records every loaded file (name, table, row count, load time); files are found by name pattern in `data/raw` (for example `transactions*.csv`). Loading a file and logging it happen in one transaction.
+  - silver: transactions are appended (only rows from bronze files not yet processed); customers and articles are upserted with `MERGE` (SCD1).
+  - gold: `MERGE` (upsert) into every gold table.
+  - Each notebook has a `FULL_REFRESH` setting to rebuild its layer from scratch, for example after changing a rule.
+- Files are tracked per file, not per row: identical transaction rows are real purchases (no quantity column), so duplicates cannot be detected per row.
 - Each step reads only from the previous layer: silver from bronze, gold from silver.
 - Silver cleaning rules are decided by me after exploring the data, and documented.
+- No SCD2 (history tracking): the source is one static snapshot without change history, so `MERGE` overwrites changed attributes (SCD1). Only add SCD2 if new snapshots start arriving over time and history becomes necessary.
 - When Gold model tables are built: use chronological splits only, no information from after the reference date in features, no target columns in the scoring dataset, and the same feature columns in training and scoring.
 - The pipeline runs separately and in advance. The API never runs the pipeline; it only reads the result.
 - The older `load_database.py` (raw directly to silver) no longer exists; the layered steps above replace it.
@@ -132,7 +138,7 @@ Pipeline rules:
 ### Notebooks versus scripts
 
 - The pipeline is first built in notebooks, one layer at a time, in this order: `01_bronze.ipynb`, `02_silver.ipynb`, `03_gold.ipynb`. A layer is only started after I have approved the previous one.
-- Each layer notebook loads its layer, runs checks against the previous layer (row counts, columns, types), and closes the DuckDB connection at the end.
+- Each layer notebook loads its layer incrementally, runs checks against the previous layer (row counts, columns, types), stops with an error if a check fails, and closes the DuckDB connection at the end.
 - `notebooks/` is also for exploration: inspecting data, trying queries, finding data problems, and charts.
 - `pipeline/` contains the final `.py` scripts. They must run top to bottom with one command, without manual steps. Once a layer works in its notebook, its logic is moved into the matching script (before Milestone 2, because Docker and GitHub Actions run scripts, not notebooks).
 - The final pipeline must never depend on a notebook.

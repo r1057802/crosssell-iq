@@ -118,6 +118,50 @@ Voor Milestone 1 gebruik ik alleen DuckDB. Bij Milestone 2 beslis ik of ik Postg
 - Daarna `bronze_to_silver.py`, en pas als die hetzelfde resultaat geeft, `load_database.py` verwijderen.
 - Eerste commit en push naar GitHub.
 
+## Sessie 1, vervolg: Git en de bronze-laag (1 oktober 2026)
+
+**Gepland**
+De projectregels bijwerken, de repository op GitHub zetten en de bronze-laag bouwen.
+
+**Gedaan**
+- `CLAUDE.md` bijgewerkt naar de nieuwe aanpak. `AGENTS.md` is nu alleen een verwijzing naar `CLAUDE.md`, zodat er één bron van projectregels is.
+- `.gitignore` ingevuld (het bestand was leeg): data, de DuckDB-database, `.venv`, `.env`, `kaggle.json` en build-output worden uitgesloten. Getest in een aparte testrepo.
+- Repository `crosssell-iq` aangemaakt op GitHub en de eerste commit gepusht ("Initial project blueprint").
+- Branch `feature/notebook-pipeline` aangemaakt om de pipeline te bouwen zonder `main` te wijzigen.
+- Notebook `01_bronze.ipynb` gemaakt en gedraaid: `bronze.articles` (105.542 rijen), `bronze.customers` (1.371.980) en `bronze.transactions` (31.788.324), telkens gecontroleerd tegenover de CSV's.
+- Bronze daarna incrementeel gemaakt met een laadlogboek (`bronze.load_log`).
+- De bronze-data verkend als basis voor de opschoonregels van silver.
+
+**Waar liep ik vast**
+- Bij de eerste push koppelde ik de remote aan een voorbeeld-URL. Opgelost met `git remote set-url origin`.
+- Ik commitde het bronze-notebook op `main` voordat ik de feature-branch aanmaakte. Ik heb het zo gelaten, omdat de versie werkte en het terugdraaien de geschiedenis van `main` zou herschrijven.
+
+**Technische keuzes**
+
+*De pipeline eerst in notebooks, laag per laag*
+- Ik bouw de pipeline eerst in notebooks: `01_bronze`, `02_silver`, `03_gold`. Een volgende laag begin ik pas als de vorige gecontroleerd is. Voor Milestone 2 zet ik de logica om naar scripts in `pipeline/`, omdat Docker en GitHub Actions scripts draaien en geen notebooks.
+- Elk notebook controleert zijn resultaat (aantal rijen, kolommen, types) en stopt met een fout als een controle faalt.
+
+*Incrementele pipeline*
+- De Kaggle-bestanden veranderen nooit, maar ik bouw de pipeline toch incrementeel, zodat nieuwe leveringen verwerkt kunnen worden zonder de code aan te passen.
+- Bronze houdt in `bronze.load_log` bij welke bestanden al geladen zijn, en laadt alleen nieuwe bestanden (append). Een tweede run laadt niets: de pipeline is idempotent.
+- Het laden van een bestand en de regel in het laadlogboek gebeuren in één databasetransactie. Mislukt een lading, dan wordt alles teruggedraaid.
+- Ik volg bestanden en geen rijen, omdat identieke transactierijen echte aankopen zijn: de dataset heeft geen kolom voor het aantal stuks.
+- Plan voor de volgende lagen: silver voegt nieuwe transacties toe en werkt klanten en artikels bij met `MERGE`; gold gebruikt `MERGE` voor alle tabellen.
+- Met `FULL_REFRESH = True` kan ik een laag altijd van nul opnieuw opbouwen.
+
+*Geen SCD2*
+- SCD2 (historiek van wijzigingen bijhouden) gebruik ik niet: de bron is één momentopname zonder wijzigingshistoriek. `MERGE` overschrijft gewijzigde waarden (SCD1). Ik voeg SCD2 pas toe als er nieuwe momentopnames binnenkomen en de historiek nodig wordt.
+- Beperking voor Milestone 4: klantkenmerken zoals `age` en `club_member_status` hebben geen datum. Als feature kunnen ze informatie van na de referentiedatum bevatten (lekkagerisico).
+
+*Git*
+- Ik werk op een feature-branch en voeg die via een Pull Request samen met `main`. Zo blijft `main` een werkende versie.
+
+**Volgende stap**
+- Bronze incrementeel draaien, twee keer, om te tonen dat de tweede run niets laadt.
+- `02_silver.ipynb` incrementeel maken en draaien.
+- Daarna `03_gold.ipynb` met de baseline-tabellen.
+
 ## Leerpaden en certificaten
 
 - AZ-900 (Microsoft Azure Fundamentals) leerroute: gepland als voorbereiding op Milestone 3.
