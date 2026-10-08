@@ -1,5 +1,5 @@
 # Data: raw Kaggle files and the DuckDB database are rebuilt locally (see README)
-data/
+/data/
 *.duckdb
 *.duckdb.wal
 
