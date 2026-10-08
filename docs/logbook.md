@@ -162,6 +162,112 @@ De projectregels bijwerken, de repository op GitHub zetten en de bronze-laag bou
 - `02_silver.ipynb` incrementeel maken en draaien.
 - Daarna `03_gold.ipynb` met de baseline-tabellen.
 
+## Sessie 2: 2 oktober 2026
+
+**Gepland**
+De incrementele bronze-laag op mijn eigen database draaien en de silver-laag bouwen.
+
+**Gedaan**
+- `01_bronze.ipynb` (incrementeel) gedraaid. Omdat mijn database nog bronze-tabellen zonder laadlogboek had, bouwde het notebook bronze één keer opnieuw op en maakte het `bronze.load_log` aan met drie bestanden.
+- `02_silver.ipynb` incrementeel gebouwd en gedraaid. Resultaat:
+  - `silver.customers`: 1.371.980 klanten, één rij per klant;
+  - `silver.articles`: 105.542 artikels, één rij per artikel;
+  - `silver.transactions`: 31.788.324 transacties, van 2018-09-20 tot 2020-09-22.
+- Alle 17 silver-controles geslaagd: aantallen tegenover bronze, kolommen en types, unieke sleutels, elke transactie heeft een bestaande klant en een bestaand artikel, en de opschoonregels.
+- Silver een tweede keer gedraaid: 0 nieuwe bestanden en niets veranderd. Silver is dus idempotent, net als bronze.
+- 9.699 klanten hebben nooit iets gekocht. Die heb ik nodig voor de foutafhandeling van de API ("klant zonder aankoopgeschiedenis").
+- `CLAUDE.md` en `AGENTS.md` bijgewerkt met de silver-regels.
+
+**Waar liep ik vast**
+- Silver faalde met "bronze.load_log not found". VS Code had het bronze-notebook nog open met de oude inhoud. Daardoor draaide de oude versie, en bij het opslagen overschreef VS Code de nieuwe versie op schijf. Opgelost met `git restore notebooks/01_bronze.ipynb`, waarna ik het notebook opnieuw opende.
+- De uitvoer van een run was niet zichtbaar omdat ik het notebook niet had opgeslagen na het draaien.
+
+**Technische keuzes**
+
+*Opschoonregels silver*
+- `fn` en `active` worden `BOOLEAN`: `1.0` wordt `TRUE`, leeg blijft `NULL`. De dataset zegt niet wat leeg betekent, dus `NULL` (onbekend) is eerlijker dan `FALSE`.
+- `fashion_news_frequency`: `None` en `NONE` samengevoegd tot `NONE`.
+- `postal_code` laat ik weg: niet nodig voor de baseline, en minder persoonsgegevens bewaren is veiliger (dataminimalisatie). Het staat nog in bronze.
+- Bij artikels houd ik alleen de leesbare namen. De numerieke codes bevatten dezelfde informatie, en `detail_desc` gebruik ik niet.
+- De categorie `Unknown` blijft in silver. Silver beschrijft de data zoals ze is; of `Unknown` aanbevolen mag worden, beslis ik in gold.
+- De 2.974.905 identieke transactierijen blijven staan. De dataset heeft geen kolom voor het aantal stuks: het zijn meerdere stuks van hetzelfde artikel op dezelfde dag, dus echte aankopen.
+- `price` is een geschaalde waarde van Kaggle, geen bedrag in euro.
+
+*Incrementeel laden in silver*
+- `silver.load_log` houdt bij welke bronze-bestanden silver al verwerkte.
+- Transacties zijn gebeurtenissen die achteraf niet veranderen: nieuwe rijen worden toegevoegd (append).
+- Klanten en artikels beschrijven een toestand die kan veranderen: ze worden bijgewerkt met `MERGE` (SCD1, de nieuwste momentopname wint).
+- `customer_id` en `article_id` zijn primary keys, zodat de database zelf geen dubbele klant of dubbel artikel toelaat.
+- Ik gebruik `MERGE ... UPDATE BY NAME` en niet `UPDATE SET *`. Ik testte dat `UPDATE SET *` kolommen op positie koppelt: bij een andere kolomvolgorde komen waarden ongemerkt in de verkeerde kolom.
+- Wordt bronze opnieuw opgebouwd, dan merkt silver dat aan de gewijzigde laadtijden en bouwt het zichzelf ook opnieuw op. Zo kan silver nooit verouderde of dubbele data bevatten.
+
+**Volgende stap**
+- `02_silver.ipynb` committen op `feature/notebook-pipeline`.
+- `03_gold.ipynb` met `gold.category_popularity`, `gold.customer_categories` en `gold.example_customers`. Eerst beslissen wat er met `Unknown` en de heel kleine categorieën gebeurt.
+
+## Sessie 3: 4 tot 8 oktober 2026
+
+**Gepland**
+De gold-laag bouwen in `03_gold.ipynb` en de drie notebooks omzetten naar scripts in `pipeline/`, met `run_pipeline.py` als één commando.
+
+**Gedaan**
+- `03_gold.ipynb` gebouwd en gedraaid. Resultaat:
+  - `gold.customers`: 1.371.980 klanten;
+  - `gold.customer_categories`: 4.819.805 rijen (klant en categorie);
+  - `gold.category_popularity`: 18 categorieën;
+  - `gold.example_customers`: 12 demo-klanten.
+- Alle 10 gold-controles geslaagd. Een tweede run gaf "Gold is already up to date": gold is idempotent.
+- De logica van de drie notebooks omgezet naar scripts: `raw_to_bronze.py`, `bronze_to_silver.py`, `silver_to_gold.py`, de gedeelde controles in `check_quality.py`, en `run_pipeline.py` dat de drie lagen na elkaar draait.
+- De scripts regel per regel vergeleken met de notebooks: de laadlogica en de controles zijn gelijk. De verschillen zijn bewust: `--full-refresh` in plaats van `FULL_REFRESH`, het pad naar de database, en de inspectiequeries die alleen in de notebooks staan.
+- `check_quality.py` apart gedraaid op de bestaande database: alle 43 controles geslaagd (16 bronze, 17 silver, 10 gold).
+- `requirements.txt` (DuckDB) en `requirements-dev.txt` (`ipykernel`) in de hoofdmap gezet; `ml/requirements.txt` verwijderd.
+- README aangevuld met de stappen om de pipeline te draaien en de definitie van de populariteitsscore.
+
+**Planning tegenover werkelijkheid**
+- Gepland: pipeline klaar op 5 oktober, daarna de API van 6 tot 12 oktober.
+- Werkelijk: de pipeline was op 8 oktober klaar (inclusief controle), de API is nog niet gestart.
+
+**Waar liep ik vast**
+- Bij de controle bleek dat 506 klanten alleen artikels uit de categorie `Unknown` kochten. Omdat gold `Unknown` uitsluit, hebben ze 0 categorieën en lijken ze op klanten die nooit iets kochten. Een van de drie demo-klanten met 0 categorieën is zo'n klant (zie technische keuzes).
+
+**Technische keuzes**
+
+*Inhoud van gold*
+- `gold.category_popularity`: per categorie het aantal unieke kopers. De `popularity_score` is dat aantal gedeeld door het aantal kopers van de grootste categorie, dus tussen 0 en 1. Het is geen kans dat een klant iets koopt.
+- `gold.customer_categories`: per klant de categorieën die die al kocht, met de eerste aankoopdatum en het aantal aankopen.
+- `gold.customers`: alle klanten, ook wie nooit iets kocht. Zo kan de API een onbekende klant (`404`) onderscheiden van een bestaande klant zonder aankopen.
+- `gold.example_customers`: telkens drie klanten met 0, 1, 2 tot 3 en 4 of meer gekochte categorieën, gekozen op laagste `customer_id`. Elke run geeft dus dezelfde demo-klanten, en omdat het ID een hash is, is die keuze in de praktijk willekeurig.
+
+*Categorieën*
+- `Unknown` en lege categorieën worden in gold uitgesloten: een aanbeveling "Unknown" is niet bruikbaar.
+- Heel kleine categorieën (bijvoorbeeld `Fun` met 5 kopers) blijven staan. Door hun lage score komen ze altijd onderaan de ranking.
+
+*Klanten met alleen `Unknown`-aankopen*
+- De 506 klanten die alleen `Unknown` kochten, krijgen dezelfde aanbevelingen als klanten die nooit iets kochten. Gold scheidt die twee groepen daarom niet.
+- De API mag wel niet zeggen dat zo'n klant nooit iets kocht. De melding wordt "geen aankopen in een aanbeveelbare categorie". Dat staat nu in `03_gold.ipynb` en in `CLAUDE.md`/`AGENTS.md`.
+
+*Incrementeel laden in gold*
+- `gold.source_log` onthoudt welke silver-versie gold verwerkte. Is silver niet veranderd, dan slaat gold alles over.
+- Is silver wel veranderd, dan berekent gold alle tabellen opnieuw. Silver-transacties houden hun bronbestand niet bij, dus gold kan niet per bestand bijwerken. Voor 18 categorieën en één momentopname is volledig herberekenen eenvoudig en correct.
+- Dit wijkt af van het oorspronkelijke plan "`MERGE` voor alle gold-tabellen": de code doet wel een `MERGE`, maar na het leegmaken van de tabellen werkt dat in de praktijk als volledig herladen.
+- Het herberekenen en het bijwerken van `gold.source_log` gebeuren in één transactie.
+
+*Geen sterschema*
+- Gold is geen sterschema met feiten- en dimensietabellen. Gold heeft één gebruiker, de API, en bevat daarom kleine tabellen die precies op de aanbevelingsvraag zijn afgestemd. Een sterschema is vooral nuttig voor BI-analyse en zou hier extra joins toevoegen. De opdracht vraagt er ook niet om. Bij het optionele dashboard in Milestone 4 bekijk ik dit opnieuw.
+
+*Scripts*
+- Elk script heeft een `main()`-functie, sluit de databaseverbinding altijd (ook bij een fout) en kan apart draaien. `--full-refresh` bouwt een laag opnieuw op.
+- De controles staan één keer in `check_quality.py`. De scripts gebruiken ze na het laden, en het bestand kan ook alleen draaien om een bestaande database read-only te controleren.
+
+*Voor Milestone 4*
+- De populariteit gebruikt nu alle data tot september 2020. Om de baseline eerlijk met het gepersonaliseerde model te vergelijken, moet ik ze opnieuw berekenen met alleen data tot de referentiedatum, anders lekt er informatie uit de toekomst in.
+
+**Volgende stap**
+- `run_pipeline.py` twee keer draaien om te tonen dat de scripts idempotent zijn.
+- `01_bronze.ipynb` opnieuw draaien en opslaan met uitvoer.
+- Silver, gold en de scripts committen op `feature/notebook-pipeline`.
+- Beginnen aan de C#-API: project, `GET /health`, read-only DuckDB-verbinding en de repository.
+
 ## Leerpaden en certificaten
 
 - AZ-900 (Microsoft Azure Fundamentals) leerroute: gepland als voorbereiding op Milestone 3.
