@@ -4,6 +4,8 @@
 
 Place this file, named `CLAUDE.md`, in the root directory of the project you open in Claude Code. Claude Code must treat these instructions as the default rules for the entire project. If a subfolder contains another `CLAUDE.md`, the more specific file may add to or override these rules for files in that subfolder.
 
+`AGENTS.md` contains the same rules for other AI coding agents. Keep both files identical apart from the "How to use this file" section: when one changes, update the other in the same step.
+
 ## User context
 
 - My name is Nicolas Diaz Valencia.
@@ -60,6 +62,7 @@ crosssell-iq/
 ├── .venv/              # local Python virtual environment (not in Git)
 ├── requirements.txt    # Python packages needed by the pipeline and ml
 ├── requirements-dev.txt # development-only packages such as ipykernel
+├── AGENTS.md           # same rules as CLAUDE.md, for other AI agents
 ├── CLAUDE.md
 └── README.md
 ```
@@ -124,7 +127,7 @@ Pipeline rules:
 
 - The pipeline is incremental and idempotent: each run processes only what is new, and running it twice changes nothing the second time.
   - bronze: append per new file. `bronze.load_log` records every loaded file (name, table, row count, load time); files are found by name pattern in `data/raw` (for example `transactions*.csv`). Loading a file and logging it happen in one transaction.
-  - silver: transactions are appended (only rows from bronze files not yet processed); customers and articles are upserted with `MERGE` (SCD1).
+  - silver: `silver.load_log` records every bronze file silver has processed. Transactions are appended (only rows from bronze files not yet processed); customers and articles are upserted with `MERGE ... UPDATE BY NAME / INSERT BY NAME` (SCD1, latest snapshot wins). Never use `UPDATE SET *`, it matches columns by position. If bronze was rebuilt, silver rebuilds itself.
   - gold: `MERGE` (upsert) into every gold table.
   - Each notebook has a `FULL_REFRESH` setting to rebuild its layer from scratch, for example after changing a rule.
 - Files are tracked per file, not per row: identical transaction rows are real purchases (no quantity column), so duplicates cannot be detected per row.
@@ -210,7 +213,7 @@ Expected response shape:
 ```
 
 - The baseline score is a normalized popularity score. Document its definition in the README. Never present it as a predicted purchase probability.
-- Error handling: empty or invalid customer ID (`400`), unknown customer (`404`), customer without purchase history, no new categories available, database unreachable.
+- Error handling: empty or invalid customer ID (`400`), unknown customer (`404`), customer without purchases in a recommendable category (never bought anything, or only `Unknown` articles; the message must not claim the customer never bought anything), no new categories available, database unreachable.
 - Tests: valid customer returns recommendations, unknown customer returns `404`, already-purchased categories are never recommended, results are sorted by score.
 - The web page offers real example customer IDs from `gold.example_customers`, so a demo does not depend on typing a hash.
 
