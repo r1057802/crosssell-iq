@@ -268,6 +268,112 @@ De gold-laag bouwen in `03_gold.ipynb` en de drie notebooks omzetten naar script
 - Silver, gold en de scripts committen op `feature/notebook-pipeline`.
 - Beginnen aan de C#-API: project, `GET /health`, read-only DuckDB-verbinding en de repository.
 
+## Sessie 4: 8 oktober 2026
+
+**Gepland**
+De pipeline committen en pushen, en de C#-API starten.
+
+**Gedaan**
+- De pipeline in kleine commits op `feature/notebook-pipeline` gezet en gepusht: de genummerde secties in het bronze-notebook, het silver-notebook, het gold-notebook, de pipeline-scripts met de requirements, en de bijgewerkte projectregels en het logboek.
+- Pull Request #1 gemerged in `main`.
+- `run_pipeline.py` twee keer gedraaid: elke laag meldde "up to date", alle 43 controles slaagden en het databasebestand bleef ongewijzigd. De scripts zijn dus idempotent, net als de notebooks.
+- De DuckDB CLI geïnstalleerd (`winget install DuckDB.cli`) om de database te bekijken in de browser met `duckdb -readonly data\crossselliq.duckdb -ui`.
+- API stap 1: een ASP.NET Core-project (.NET 10) in `backend/CrossSellIQ.Api` en een solution-bestand `CrossSellIQ.slnx` in de hoofdmap, met `GET /health`.
+- API stap 2: een read-only DuckDB-verbinding (DuckDB.NET 1.5.6, dezelfde versie als de pipeline). `/health` controleert nu ook of de gold-tabellen leesbaar zijn.
+- Getest: met de juiste database geeft `/health` `200 Healthy`; met een verkeerd pad `503 Unhealthy`; met een leeg pad start de API niet. Terwijl de API draait, kan de pipeline de database nog openen om te schrijven.
+- De werking van de 506 klanten met alleen `Unknown`-aankopen vastgelegd in `03_gold.ipynb`, `CLAUDE.md` en `AGENTS.md`.
+
+**Waar liep ik vast**
+- Pull Request #1 bevatte alleen de bronze-commit, omdat de andere commits toen nog niet gemaakt waren. De rest gaat via een tweede Pull Request naar `main`.
+- Na `winget install DuckDB.cli` herkende de terminal het commando `duckdb` niet. Windows had het pad aangepast, maar een terminal die al openstond, ziet dat pas na een herstart.
+- In `.gitignore` stond `data/`. Die regel geldt voor elke map met die naam, op elk niveau, en omdat Windows geen onderscheid maakt tussen hoofdletters en kleine letters, negeerde Git ook de map `Data/` van de API. De API-code zou dus nooit in Git terechtkomen. Opgelost met `/data/`, zodat alleen de datamap in de hoofdmap genegeerd wordt.
+
+**Technische keuzes**
+
+*Opbouw van de API*
+- Lagen: Controller, Service, Repository, database. Elke laag heeft één taak, en de controller bevat geen SQL.
+- Het lege `web`-sjabloon in plaats van `webapi`, zodat er geen voorbeeldcode in zit die ik later moet weghalen.
+- Een solution-bestand in de hoofdmap, zodat `dotnet build` en `dotnet test` met één commando werken. Dat is ook nodig voor GitHub Actions in Milestone 2.
+
+*Health check*
+- `/health` gebruikt de ingebouwde health checks van ASP.NET Core. Docker (Milestone 2) en Azure (Milestone 3) kunnen dat endpoint gebruiken om te zien of de app werkt.
+- Bij een fout ziet de buitenwereld alleen `Unhealthy`. De details (pad en foutmelding) staan in de serverlog.
+
+*Databaseverbinding*
+- Het pad naar de database staat in `appsettings.json` en niet in de code. In Docker kan ik het overschrijven met de omgevingsvariabele `Database__Path`.
+- Een leeg pad is een configuratiefout: de API stopt dan meteen bij het opstarten. Een pad naar een ontbrekend bestand laat de API wel starten, maar `/health` geeft dan `503`. Zo zie je wat er mis is.
+- De verbinding is read-only: de API kan de database technisch niet wijzigen.
+- Elke aanvraag opent een eigen verbinding en sluit die meteen. Zo blokkeert een draaiende API de pipeline niet.
+
+**Volgende stap**
+- API stap 3 tot 6: repository, service en endpoint, foutafhandeling en tests.
+- De webpagina en de README.
+
+## Sessie 5: 10 oktober 2026
+
+**Gepland**
+De rest van de API (repository, service, endpoints, foutafhandeling, tests), de webpagina en de README.
+
+**Gedaan**
+- API stap 3, de repository: `IRecommendationRepository` met de implementatie `DuckDbRecommendationRepository`. Die leest uit gold of een klant bestaat, de populariteit per categorie, de gekochte categorieën van een klant en de demo-klanten. Alle SQL gebruikt parameters.
+- API stap 4, de service en de endpoints: `GET /api/recommendations/{customerId}?limit=5` en `GET /api/example-customers`.
+- API stap 5, de foutafhandeling: `400` bij een ongeldig ID of een ongeldige `limit`, `404` bij een onbekende klant, `503` als de database niet bereikbaar is, en een melding als een klant geen aanbeveelbare aankopen heeft of al alle categorieën kocht. Daarnaast beveiligingsheaders, waaronder een Content Security Policy.
+- API stap 6: een testproject `tests/CrossSellIQ.Api.Tests` met 24 tests. Alle 24 slagen.
+- Stap 7: een webpagina in `wwwroot` met een invoerveld, 12 demo-klanten, een tabel met aanbevelingen en score, de al gekochte categorieën, en laad- en foutmeldingen.
+- Stap 8: de README herschreven, van clonen tot demo, met de API-endpoints en de definitie van de score.
+- Tegen de echte database getest. Een klant met 7 gekochte categorieën kreeg 5 nieuwe, zonder één al gekochte. Een klant zonder aanbeveelbare aankopen kreeg de populairste categorieën met een melding. Een ID in hoofdletters werkte, `abc` gaf `400`, een onbekend ID `404`, en een verkeerd databasepad `503`.
+- De webpagina in de browser getest, ook op een mobiele breedte (390 pixels): geen fouten in de console, geen overtredingen van de Content Security Policy, en geen horizontaal scrollen.
+- De map `backend` hernoemd naar `src`, en de lege map `frontend` verwijderd. De API staat nu in `src/CrossSellIQ.Api`; het solution-bestand, het testproject en de README zijn aangepast.
+
+**Planning tegenover werkelijkheid**
+- Gepland: de API van 6 tot 12 oktober, de webpagina en README op 13 en 14 oktober.
+- Werkelijk: de API, de webpagina en de README stonden op 10 oktober. De achterstand van de pipeline is daarmee ingehaald.
+
+**Waar liep ik vast**
+- Ik heb `git add backend/` gecommit terwijl stap 3 tot 5 al in de map stonden. Commit `39bfe37` ("Add API project with health endpoint and read-only DuckDB connection") bevat daardoor ook de repository, de service en de foutafhandeling. Bovendien verwijst `CrossSellIQ.slnx` in die commit al naar het testproject, dat er nog niet in zit, waardoor `dotnet build` op precies die commit faalt. Ik heb de commit niet herschreven, omdat hij al gepusht was. De volgende commit voegt de tests toe, en daarmee bouwt het project weer.
+- Op de webpagina stond bij de demo-klanten eerst "0 categories bought". Dat klopt niet voor de klant die alleen `Unknown` kocht, en het is hetzelfde probleem als bij de API-melding. Aangepast naar "No recommendable purchases yet".
+
+**Technische keuzes**
+
+*De logica zit in de service, niet in de SQL*
+- De repository haalt ruwe gegevens op: de 18 categorieën met hun score, en de categorieën die de klant al kocht. De service sluit de gekochte categorieën uit, sorteert en beperkt het aantal.
+- Zo test ik de echte baseline-logica zonder database. Het gaat om zo weinig rijen dat het geen verschil in snelheid maakt.
+
+*Validatie*
+- Een klant-ID moet uit precies 64 hexadecimale tekens bestaan. Spaties en hoofdletters worden eerst opgevangen.
+- De controle gebeurt vóór er SQL draait. Een poging tot SQL-injectie geeft dus al een `400`, en de SQL gebruikt daarnaast toch parameters.
+- `limit` ligt tussen 1 en 20, standaard 5.
+
+*Klanten zonder aanbeveelbare aankopen*
+- Dat is geen fout: ze krijgen `200`, de populairste categorieën en de melding "no purchases in a recommendable category". Die melding klopt zowel voor de 9.699 klanten die nooit iets kochten als voor de 506 klanten die alleen `Unknown` kochten.
+
+*Database niet bereikbaar*
+- Een centrale handler zet elke databasefout om in `503`. Hij reageert op `DbException`, de gemeenschappelijke basisklasse van databasestuurprogramma's in .NET, zodat het ook werkt als ik later PostgreSQL gebruik.
+- De oorzaak staat alleen in de serverlog, niet in het antwoord.
+
+*Antwoord van de API*
+- Naast de afgesproken velden (`customerId`, `recommendations` met `category`, `score` en `reason`) geeft de API ook `purchasedCategories` en `message` terug. Zo zie je in de demo meteen dat al gekochte categorieën nooit aanbevolen worden.
+
+*Tests*
+- De tests gebruiken een nep-repository met vaste gegevens in plaats van de database. Ze werken dus ook in GitHub Actions (Milestone 2), waar de database van 3 GB niet staat.
+- Twee soorten tests: tests van de service (de baseline-logica) en tests van de hele HTTP-route met `WebApplicationFactory` (statuscodes, foutafhandeling).
+- In de nep-gegevens staan de categorieën bewust niet gesorteerd, zodat de test bewijst dat de service sorteert.
+
+*Webpagina*
+- Gewone HTML, CSS en JavaScript, zonder framework, geserveerd door de API zelf. Eén project en één URL maken Docker en Azure eenvoudiger.
+- Alle gegevens uit de API worden met `textContent` op de pagina gezet, nooit met `innerHTML`. Zo kan data uit de API nooit als HTML of script uitgevoerd worden (bescherming tegen XSS).
+- De Content Security Policy laat alleen scripts en stijlen van de eigen site toe. Daarom staan JavaScript en CSS in aparte bestanden.
+- Toegankelijkheid: labels bij elk veld, zichtbare focus, foutmeldingen die een schermlezer voorleest, en na een zoekopdracht gaat de focus naar de resultaten.
+
+*Mapnamen: `src` in plaats van `backend` en `frontend`*
+- De webpagina staat in `wwwroot`, de standaardmap van ASP.NET voor statische bestanden, en wordt door de API zelf geserveerd. Daardoor bevatte de map `backend` ook de frontend, en bleef de map `frontend` leeg.
+- `src` (de broncode van de applicatie, naast `tests`) is de gebruikelijke naam in .NET-projecten en beschrijft de inhoud correct. Komt er in Milestone 4 een apart dashboard met een framework, dan kan een aparte frontend-map opnieuw zinvol worden.
+
+**Volgende stap**
+- De tests, de webpagina en de README committen en pushen.
+- Eindtest: de repository in een lege map clonen en alles opstarten met alleen de README.
+- Pull Request #2 naar `main`.
+
 ## Leerpaden en certificaten
 
 - AZ-900 (Microsoft Azure Fundamentals) leerroute: gepland als voorbereiding op Milestone 3.
