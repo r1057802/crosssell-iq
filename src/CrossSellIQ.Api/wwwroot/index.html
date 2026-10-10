@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CrossSellIQ</title>
+    <meta name="description" content="Baseline recommendations of product categories an H&amp;M customer has not bought yet.">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="container">
+            <p class="brand">CrossSellIQ</p>
+            <h1>Which product category could this H&amp;M customer buy next?</h1>
+            <p class="lead">
+                Enter a customer ID to see popular product categories the customer has not bought yet,
+                ranked by popularity. This is the baseline version: every customer gets the same ranking,
+                without the categories they already bought.
+            </p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel" aria-labelledby="search-title">
+            <h2 id="search-title">Find recommendations</h2>
+            <form id="search-form" novalidate>
+                <div class="field">
+                    <label for="customer-id">Customer ID</label>
+                    <input id="customer-id" name="customerId" type="text" autocomplete="off" spellcheck="false"
+                           aria-describedby="customer-id-hint customer-id-error" required>
+                    <p id="customer-id-hint" class="hint">A 64-character hexadecimal hash from the H&amp;M dataset.</p>
+                    <p id="customer-id-error" class="field-error" hidden></p>
+                </div>
+                <div class="form-row">
+                    <div class="field field-small">
+                        <label for="limit">Number of recommendations</label>
+                        <select id="limit" name="limit">
+                            <option value="3">3</option>
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                            <option value="18">18</option>
+                        </select>
+                    </div>
+                    <button id="submit-button" type="submit" class="button">Get recommendations</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel" aria-labelledby="examples-title">
+            <h2 id="examples-title">Example customers</h2>
+            <p class="hint">Real customers from the dataset with different purchase histories. Select one to load their recommendations.</p>
+            <p id="examples-status" class="status" role="status">Loading example customers...</p>
+            <ul id="examples-list" class="examples" hidden></ul>
+        </section>
+
+        <section id="results" class="panel" aria-labelledby="results-title" aria-live="polite" hidden>
+            <h2 id="results-title" tabindex="-1">Recommendations</h2>
+            <p id="results-status" class="status" role="status" hidden></p>
+            <div id="results-error" class="alert" role="alert" hidden></div>
+
+            <div id="results-content" hidden>
+                <dl class="summary">
+                    <div>
+                        <dt>Customer</dt>
+                        <dd id="result-customer" class="mono"></dd>
+                    </div>
+                    <div>
+                        <dt>Already bought</dt>
+                        <dd><ul id="result-purchased" class="tags"></ul></dd>
+                    </div>
+                </dl>
+                <p id="result-message" class="notice" hidden></p>
+
+                <div class="table-wrapper">
+                    <table id="result-table">
+                        <caption class="visually-hidden">Recommended categories, highest score first</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Rank</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Score</th>
+                                <th scope="col">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="result-rows"></tbody>
+                    </table>
+                </div>
+                <p class="hint">
+                    Score: the number of customers who bought the category, divided by the number of buyers of
+                    the most popular category (0 to 1). It shows popularity and is not a purchase probability.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>
+                Data: H&amp;M Personalized Fashion Recommendations (Kaggle), transactions from September 2018 to
+                September 2020. School project for Cloud &amp; Ops, Thomas More.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
