@@ -1,6 +1,6 @@
 <Solution>
-  <Folder Name="/backend/">
-    <Project Path="backend/CrossSellIQ.Api/CrossSellIQ.Api.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/CrossSellIQ.Api/CrossSellIQ.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CrossSellIQ.Api.Tests/CrossSellIQ.Api.Tests.csproj" />
