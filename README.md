@@ -136,6 +136,10 @@ Compose builds the Python and C# images, runs the pipeline to completion, and th
 
 The API container receives only the DuckDB file as a read-only mount. The pipeline container can write to `data` while it builds the database. A fresh clone still needs the three Kaggle CSV files placed in `data/raw` before the Compose command; automatic data delivery is not part of this setup.
 
+### Continuous integration
+
+Every push runs `.github/workflows/ci.yml` on GitHub Actions. It restores, builds, and tests the .NET solution, then builds both Docker images. The tests use a fake repository and the Docker builds exclude `data`, so the workflow needs no Kaggle CSV files or credentials. The workflow builds images but does not publish or deploy them.
+
 ## 5. Run the tests
 
 ```powershell
