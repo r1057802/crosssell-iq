@@ -100,6 +100,17 @@ The pipeline is incremental: a second run processes nothing new and changes noth
 
 DuckDB allows only one writer at a time. Close notebook kernels that have the database open before running the pipeline. A running API does not block the pipeline: it opens a read-only connection per request and closes it right away.
 
+### Run the data pipeline in Docker
+
+The pipeline has its own image. Put `articles.csv`, `customers.csv`, and `transactions_train.csv` in `data/raw` first, as described in step 2. Then run from the project root:
+
+```powershell
+docker build -f Dockerfile.pipeline -t crossselliq-pipeline:milestone-2 .
+docker run --rm --mount "type=bind,source=$((Get-Location).Path)\data,target=/app/data" crossselliq-pipeline:milestone-2
+```
+
+The container runs the same Bronze, Silver, and Gold scripts as the local Python command. It writes `data/crossselliq.duckdb` to the mounted local data directory. A second run processes no new files. This step does not download Kaggle data; a fresh clone needs the three CSV files before the container can run.
+
 ## 4. Run the API and the web page
 
 ```powershell
@@ -112,6 +123,18 @@ Then open:
 - Health check: http://localhost:5168/health (shows `Healthy`)
 
 On the web page, select one of the example customers, or paste a customer ID and select **Get recommendations**. Stop the API with `Ctrl+C`.
+
+### Run the local stack with Docker Compose
+
+After putting the three CSV files in `data/raw`, run this command from the project root:
+
+```powershell
+docker compose up --build -d
+```
+
+Compose builds the Python and C# images, runs the pipeline to completion, and then starts the API. Open http://localhost:5168/ and check http://localhost:5168/health. Stop any separately running local API on port 5168 before starting Compose. To stop the containers, run `docker compose down`; the local `data` directory stays in place.
+
+The API container receives only the DuckDB file as a read-only mount. The pipeline container can write to `data` while it builds the database. A fresh clone still needs the three Kaggle CSV files placed in `data/raw` before the Compose command; automatic data delivery is not part of this setup.
 
 ## 5. Run the tests
 

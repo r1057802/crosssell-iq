@@ -1,0 +1,28 @@
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.pipeline
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+        bind:
+          create_host_path: false
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      pipeline:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:5168:8080"
+    volumes:
+      - type: bind
+        source: ./data/crossselliq.duckdb
+        target: /data/crossselliq.duckdb
+        read_only: true
+        bind:
+          create_host_path: false
