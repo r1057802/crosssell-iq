@@ -1,0 +1,10 @@
+**
+!src/
+!src/CrossSellIQ.Api/
+!src/CrossSellIQ.Api/**
+
+src/CrossSellIQ.Api/**/bin/
+src/CrossSellIQ.Api/**/obj/
+src/CrossSellIQ.Api/**/.env
+src/CrossSellIQ.Api/**/.env.*
+src/CrossSellIQ.Api/**/kaggle.json

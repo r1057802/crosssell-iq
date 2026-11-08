@@ -1,0 +1,10 @@
+**
+!requirements.txt
+!pipeline/
+!pipeline/**
+
+pipeline/**/__pycache__/
+pipeline/**/*.py[cod]
+pipeline/**/.env
+pipeline/**/.env.*
+pipeline/**/kaggle.json

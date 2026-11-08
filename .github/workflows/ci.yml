@@ -1,0 +1,35 @@
+name: CI
+
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore .NET dependencies
+        run: dotnet restore CrossSellIQ.slnx
+
+      - name: Build .NET solution
+        run: dotnet build CrossSellIQ.slnx --configuration Release --no-restore
+
+      - name: Run .NET tests
+        run: dotnet test CrossSellIQ.slnx --configuration Release --no-build
+
+      - name: Build API image
+        run: docker build --file Dockerfile --tag crossselliq-api:ci .
+
+      - name: Build pipeline image
+        run: docker build --file Dockerfile.pipeline --tag crossselliq-pipeline:ci .
