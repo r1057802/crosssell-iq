@@ -5,12 +5,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pipeline/ pipeline/
-RUN useradd --create-home --user-group --uid 10001 app \
-    && mkdir -p /app/data/raw \
-    && chown -R app:app /app/data
+RUN useradd --user-group --uid 10001 app
 
-ENV HOME=/home/app \
-    PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 USER app
 

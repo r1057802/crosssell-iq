@@ -1,3 +1,4 @@
+# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /source
 
@@ -8,6 +9,7 @@ COPY src/CrossSellIQ.Api/ src/CrossSellIQ.Api/
 RUN dotnet publish src/CrossSellIQ.Api/CrossSellIQ.Api.csproj \
     --configuration Release --no-restore --output /app/publish
 
+# Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish .
