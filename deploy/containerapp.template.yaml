@@ -1,0 +1,46 @@
+# Azure Container App configuration for the CrossSellIQ API and web page.
+#
+# __ENVIRONMENT_ID__ is replaced with the full resource ID of the Container Apps
+# environment just before deployment, so the subscription ID stays out of Git.
+# The file only contains ASCII characters, so it can be written with any encoding.
+
+location: germanywestcentral
+properties:
+  managedEnvironmentId: __ENVIRONMENT_ID__
+  workloadProfileName: Consumption
+  configuration:
+    activeRevisionsMode: Single
+    ingress:
+      external: true
+      targetPort: 8080
+      transport: Auto
+      allowInsecure: false
+  template:
+    containers:
+      - name: api
+        image: ghcr.io/r1057802/crossselliq-api:latest
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+        env:
+          - name: Database__Path
+            value: /data/crossselliq_gold.duckdb
+        volumeMounts:
+          - volumeName: gold-data
+            mountPath: /data
+        probes:
+          # Traffic is only sent to the app once /health can read the database.
+          - type: Readiness
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+    scale:
+      # Scale to zero when nobody uses the app, so it costs nothing while idle.
+      minReplicas: 0
+      maxReplicas: 1
+    volumes:
+      - name: gold-data
+        storageType: AzureFile
+        storageName: golddata
