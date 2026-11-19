@@ -34,6 +34,13 @@ app.Use(async (context, next) =>
     headers["Content-Security-Policy"] =
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; " +
         "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+    // Tells browsers to use HTTPS only. Azure terminates TLS before the request reaches the app, so the
+    // header is set directly instead of with UseHsts(), which only adds it to requests the app sees as HTTPS.
+    // Browsers ignore it over plain HTTP, so local Docker runs are not affected.
+    if (!app.Environment.IsDevelopment())
+    {
+        headers["Strict-Transport-Security"] = "max-age=31536000";
+    }
     await next();
 });
 
