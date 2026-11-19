@@ -105,7 +105,7 @@ The next merge to `main` deploys the newest commit again.
 
 ## Updating the database in the cloud
 
-The cloud database only changes when it is uploaded again. Run these commands from the project root:
+The cloud database only changes when it is uploaded again. Run these commands in PowerShell from the project root (the `$revision` variable does not work in the classic command prompt):
 
 ```powershell
 .venv\Scripts\python.exe pipeline\run_pipeline.py
@@ -116,6 +116,8 @@ az containerapp revision restart --name crossselliq --resource-group rg-crosssel
 ```
 
 The restart makes sure the running container opens the new file. The API opens a new read-only connection per request, so the database never needs to be locked for writing in the cloud.
+
+The upload replaces the file on the share in place. If it stops before 100% (for example with a network timeout), the share holds an incomplete file and the live app can fail. Run the upload again until it reaches 100%, then restart the revision. Check the result with `/health`.
 
 ## Costs and cost control
 
