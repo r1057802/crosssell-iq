@@ -1,6 +1,9 @@
 name: CI
 
-on: push
+on:
+  push:
+  workflow_dispatch:
+
 
 permissions:
   contents: read
@@ -33,3 +36,30 @@ jobs:
 
       - name: Build pipeline image
         run: docker build --file Dockerfile.pipeline --tag crossselliq-pipeline:ci .
+    
+  publish-image:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/crossselliq-api
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Log in to GitHub Container Registry
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Build API image
+        run: docker build --file Dockerfile --tag "$IMAGE:${{ github.sha }}" --tag "$IMAGE:latest" .
+
+      - name: Push API image
+        run: docker push --all-tags "$IMAGE"
+
