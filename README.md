@@ -2,7 +2,9 @@
 
 CrossSellIQ recommends product categories that an existing H&M customer has never bought before. It consists of a Python and DuckDB data pipeline, an ASP.NET Core API, and a web page served by that API.
 
-This version is the **baseline** (Milestone 1): it recommends the most popular categories the customer has not bought yet, ranked by popularity. Every customer gets the same ranking, minus the categories they already bought. Personalized recommendations follow in a later milestone.
+**Live:** https://crossselliq.salmonpond-b87be68e.germanywestcentral.azurecontainerapps.io/
+
+This version is the **baseline**: it recommends the most popular categories the customer has not bought yet, ranked by popularity. Every customer gets the same ranking, minus the categories they already bought. Personalized recommendations follow in a later milestone.
 
 School project for Cloud & Ops and Artificial Intelligence, Thomas More (2026-2027).
 
@@ -17,6 +19,8 @@ data/raw/*.csv  ->  pipeline (Python + DuckDB)  ->  data/crossselliq.duckdb  -> 
 - The **API** only reads the Gold tables, in read-only mode. It never runs the pipeline and never reads the full transactions.
 - The **web page** is plain HTML, CSS, and JavaScript in `src/CrossSellIQ.Api/wwwroot`, served by the API.
 
+In the cloud, the API runs on Azure Container Apps. The pipeline still runs locally; only a small copy of the Gold tables is uploaded to private Azure storage, which the container mounts read-only. Every merge to `main` builds, tests, publishes, and deploys the API automatically. See [docs/deployment.md](docs/deployment.md) for the architecture, the CI/CD flow, costs, and the Azure setup.
+
 ## Requirements
 
 | Tool | Version used | Needed for |
@@ -26,6 +30,8 @@ data/raw/*.csv  ->  pipeline (Python + DuckDB)  ->  data/crossselliq.duckdb  -> 
 | .NET SDK | 10.0 | the API, web page, and tests |
 | Kaggle account and Kaggle CLI | | downloading the data |
 | Free disk space | about 7 GB | raw CSV files (3.7 GB) and the database (about 3 GB) |
+| Docker Desktop | 29 | optional: running the stack in containers |
+| Azure CLI | | only for deploying or updating the cloud version |
 
 The data and the database are not in Git. Every setup downloads the data and builds the database locally.
 
@@ -97,6 +103,7 @@ The pipeline is incremental: a second run processes nothing new and changes noth
 | `.venv\Scripts\python.exe pipeline\check_quality.py` | Validate an existing database without changing it |
 | `.venv\Scripts\python.exe pipeline\raw_to_bronze.py` | Run one layer (also `bronze_to_silver.py`, `silver_to_gold.py`) |
 | `.venv\Scripts\python.exe pipeline\run_pipeline.py --full-refresh` | Rebuild everything from the raw files |
+| `.venv\Scripts\python.exe pipeline\export_gold.py` | Write the Gold tables to `data/crossselliq_gold.duckdb`, the small copy used in Azure |
 
 DuckDB allows only one writer at a time. Close notebook kernels that have the database open before running the pipeline. A running API does not block the pipeline: it opens a read-only connection per request and closes it right away.
 
@@ -136,9 +143,17 @@ Compose builds the Python and C# images, runs the pipeline to completion, and th
 
 The API container receives only the DuckDB file as a read-only mount. The pipeline container can write to `data` while it builds the database. A fresh clone still needs the three Kaggle CSV files placed in `data/raw` before the Compose command; automatic data delivery is not part of this setup.
 
-### Continuous integration
+### Continuous integration and deployment
 
-Every push runs `.github/workflows/ci.yml` on GitHub Actions. It restores, builds, and tests the .NET solution, then builds both Docker images. The tests use a fake repository and the Docker builds exclude `data`, so the workflow needs no Kaggle CSV files or credentials. The workflow builds images but does not publish or deploy them.
+Every push runs `.github/workflows/ci.yml` on GitHub Actions:
+
+| Job | Runs on | What it does |
+|---|---|---|
+| `build-and-test` | every branch | Restores, builds, and tests the .NET solution, then builds both Docker images |
+| `publish-image` | `main` | Pushes the API image to GitHub Container Registry, tagged with the commit SHA |
+| `deploy` | `main` | Logs in to Azure with OIDC (no password), deploys the new image, and checks `/health` |
+
+Each job only starts when the previous one succeeded. The tests use a fake repository and the Docker builds exclude `data`, so the workflow needs no Kaggle CSV files. Details are in [docs/deployment.md](docs/deployment.md).
 
 ## 5. Run the tests
 
@@ -228,18 +243,25 @@ dotnet run --project src/CrossSellIQ.Api --launch-profile http
 
 The API stops at startup when the path is empty. When the file is missing or locked, the API still starts, but `/health` and the recommendation endpoints return `503`.
 
-This version has no secrets and needs no `.env` file.
+The Docker image sets `Database__Path=/data/crossselliq.duckdb`. In Azure, the Container App overrides it with `/data/crossselliq_gold.duckdb`, the gold-only copy on the mounted file share.
+
+The application has no secrets and needs no `.env` file. The deployment uses three GitHub repository secrets that identify the Azure identity, directory, and subscription; none of them is a password (see [docs/deployment.md](docs/deployment.md)).
 
 ## Project structure
 
 ```
 crosssell-iq/
+├── .github/workflows/ci.yml   # CI/CD: build and test, publish the image, deploy to Azure
 ├── src/CrossSellIQ.Api/       # ASP.NET Core API: Controllers -> Services -> Repositories -> DuckDB; web page in wwwroot
 ├── tests/CrossSellIQ.Api.Tests/  # xUnit tests with a fake repository
-├── pipeline/                  # raw -> bronze -> silver -> gold scripts and quality checks
+├── pipeline/                  # raw -> bronze -> silver -> gold scripts, quality checks, and the gold-only export
 ├── notebooks/                 # the same pipeline built step by step, plus exploration
-├── data/                      # raw CSV files and the DuckDB database (not in Git)
-├── docs/                      # assignment and logbook
+├── data/                      # raw CSV files and the DuckDB databases (not in Git)
+├── deploy/                    # Azure Container App configuration template
+├── docs/                      # assignment, deployment guide, and logbook
+├── Dockerfile                 # API image
+├── Dockerfile.pipeline        # pipeline image
+├── compose.yaml               # local stack: pipeline, then API
 ├── CrossSellIQ.slnx           # .NET solution: API and tests
 ├── requirements.txt           # Python packages for the pipeline
 └── requirements-dev.txt       # extra packages for the notebooks
