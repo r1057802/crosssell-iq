@@ -42,6 +42,28 @@ public class RecommendationServiceTests
     }
 
     [Fact]
+    public async Task Products_BelongToTheirCategory_AndAreSortedByRank()
+    {
+        var result = await _service.GetRecommendationsAsync(
+            FakeRecommendationRepository.CustomerWithHistory, RecommendationService.MaxLimit);
+
+        var shoes = result.Response!.Recommendations.Single(r => r.Category == "Shoes");
+        Assert.Equal(["0901330", "0916256", "0898886"], shoes.Products.Select(p => p.ProductCode));
+
+        var lowerBody = result.Response.Recommendations.Single(r => r.Category == "Garment Lower body");
+        Assert.Equal(["0706016"], lowerBody.Products.Select(p => p.ProductCode));
+    }
+
+    [Fact]
+    public async Task CategoryWithoutRecentProducts_HasEmptyProductList()
+    {
+        var result = await _service.GetRecommendationsAsync(
+            FakeRecommendationRepository.CustomerWithHistory, RecommendationService.MaxLimit);
+
+        Assert.Empty(result.Response!.Recommendations.Single(r => r.Category == "Bags").Products);
+    }
+
+    [Fact]
     public async Task Limit_CapsTheNumberOfRecommendations()
     {
         var result = await _service.GetRecommendationsAsync(FakeRecommendationRepository.CustomerWithoutHistory, limit: 2);

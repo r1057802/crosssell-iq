@@ -15,8 +15,9 @@ public enum RecommendationStatus
 public sealed record RecommendationResult(RecommendationStatus Status, RecommendationResponse? Response = null);
 
 /// <summary>
-/// Baseline recommender: the most popular categories the customer has not bought yet,
-/// ranked by normalized popularity. The score is not a purchase probability.
+/// Baseline recommender in two steps: the most popular categories the customer has not bought yet,
+/// ranked by normalized popularity, each with its most bought products of the last 28 days.
+/// Scores show popularity and are not purchase probabilities.
 /// </summary>
 public sealed partial class RecommendationService(IRecommendationRepository repository)
 {
@@ -58,13 +59,30 @@ public sealed partial class RecommendationService(IRecommendationRepository repo
         var purchased = await repository.GetPurchasedCategoriesAsync(normalizedId, cancellationToken);
         var popularity = await repository.GetCategoryPopularityAsync(cancellationToken);
 
+        var topProducts = await repository.GetTopProductsAsync(cancellationToken);
+
+        // Step 1: the most popular categories the customer has not bought yet.
         var purchasedSet = purchased.ToHashSet(StringComparer.Ordinal);
-        var recommendations = popularity
+        var categories = popularity
             .Where(category => !purchasedSet.Contains(category.Category))
             .OrderByDescending(category => category.PopularityScore)
             .ThenBy(category => category.Category, StringComparer.Ordinal)
             .Take(limit)
-            .Select(category => new Recommendation(category.Category, Math.Round(category.PopularityScore, 4), BaselineReason))
+            .ToList();
+
+        // Step 2: the most bought products inside each of those categories. The category is new
+        // to the customer, so none of its products can have been bought before.
+        var productsByCategory = topProducts.ToLookup(product => product.Category, StringComparer.Ordinal);
+        var recommendations = categories
+            .Select(category => new Recommendation(
+                category.Category,
+                Math.Round(category.PopularityScore, 4),
+                BaselineReason,
+                productsByCategory[category.Category]
+                    .OrderBy(product => product.Rank)
+                    .Select(product => new ProductRecommendation(
+                        product.ProductCode, product.Name, product.Type, Math.Round(product.Score, 4)))
+                    .ToList()))
             .ToList();
 
         string? message = null;

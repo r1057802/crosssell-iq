@@ -17,7 +17,7 @@ TARGET_PATH = PROJECT_ROOT / "data" / "crossselliq_gold.duckdb"
 TEMP_PATH = TARGET_PATH.with_name(TARGET_PATH.name + ".tmp")
 
 # Tables the API reads. The export fails if one of them is missing.
-API_TABLES = ("customers", "customer_categories", "category_popularity", "example_customers")
+API_TABLES = ("customers", "customer_categories", "category_popularity", "example_customers", "category_top_products")
 
 
 def remove_database_file(path):

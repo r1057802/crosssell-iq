@@ -56,6 +56,28 @@ public sealed class DuckDbRecommendationRepository(DuckDbConnectionFactory conne
         return categories;
     }
 
+    // The table is small (at most 5 products per category), so all rows are read at once.
+    public async Task<IReadOnlyList<TopProduct>> GetTopProductsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT category, product_code, product_name, product_type, product_score, product_rank
+            FROM gold.category_top_products
+            ORDER BY category, product_rank
+            """;
+
+        var products = new List<TopProduct>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            products.Add(new TopProduct(
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+                reader.GetDouble(4), reader.GetInt64(5)));
+        }
+        return products;
+    }
+
     public async Task<IReadOnlyList<ExampleCustomer>> GetExampleCustomersAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);

@@ -8,6 +8,9 @@ import duckdb
 
 from check_quality import check_gold
 
+RECENT_DAYS = 28
+TOP_PRODUCTS_PER_CATEGORY = 5
+
 
 def main(full_refresh=False):
     con = None
@@ -58,6 +61,17 @@ def main(full_refresh=False):
                     customer_id VARCHAR PRIMARY KEY,
                     purchased_category_count BIGINT NOT NULL
                 )""",
+            "category_top_products": """
+                CREATE TABLE IF NOT EXISTS gold.category_top_products (
+                    category VARCHAR NOT NULL,
+                    product_code VARCHAR NOT NULL,
+                    product_name VARCHAR NOT NULL,
+                    product_type VARCHAR NOT NULL,
+                    recent_buyers BIGINT NOT NULL,
+                    product_score DOUBLE NOT NULL,
+                    product_rank BIGINT NOT NULL,
+                    PRIMARY KEY (category, product_code)
+                )""",
             "source_log": """
                 CREATE TABLE IF NOT EXISTS gold.source_log (
                     file_name VARCHAR PRIMARY KEY,
@@ -81,7 +95,8 @@ def main(full_refresh=False):
             )
         """).fetchone()[0]
         gold_empty = any(con.execute(f"SELECT count(*) FROM gold.{name}").fetchone()[0] == 0
-                         for name in ("customers", "customer_categories", "category_popularity", "example_customers"))
+                         for name in ("customers", "customer_categories", "category_popularity", "example_customers",
+                                      "category_top_products"))
         refresh_needed = full_refresh or source_difference > 0 or gold_empty
         print(f"Silver/Gold source-log differences: {source_difference}")
         print(f"Gold refresh needed: {refresh_needed}")
@@ -158,13 +173,54 @@ def main(full_refresh=False):
                         ORDER BY customer_id
                     ) <= 3
                 """)
-                for name in ("example_customers", "customer_categories", "category_popularity", "customers"):
+                # Step 2 of the recommendation: the most bought products inside each category.
+                # A product is a product_code (all colours of one item). Only the last 28 days are
+                # counted, because fashion is seasonal and older products may no longer be sold.
+                con.execute(f"""
+                    CREATE OR REPLACE TEMP TABLE stage_category_top_products AS
+                    WITH recent AS (
+                        SELECT t.customer_id, a.product_group_name AS category, a.product_code
+                        FROM silver.transactions t
+                        JOIN silver.articles a USING (article_id)
+                        WHERE t.transaction_date > (SELECT max(transaction_date) FROM silver.transactions)
+                                                   - INTERVAL {RECENT_DAYS} DAY
+                    ),
+                    buyers AS (
+                        SELECT category, product_code, count(DISTINCT customer_id) AS recent_buyers
+                        FROM recent
+                        GROUP BY category, product_code
+                    ),
+                    names AS (
+                        SELECT product_group_name AS category, product_code,
+                               min(prod_name) AS product_name, min(product_type_name) AS product_type
+                        FROM silver.articles
+                        GROUP BY product_group_name, product_code
+                    ),
+                    ranked AS (
+                        SELECT b.category, b.product_code, n.product_name, n.product_type, b.recent_buyers,
+                               b.recent_buyers::DOUBLE / max(b.recent_buyers) OVER (PARTITION BY b.category)
+                                   AS product_score,
+                               row_number() OVER (PARTITION BY b.category
+                                                  ORDER BY b.recent_buyers DESC, b.product_code) AS product_rank
+                        FROM buyers b
+                        JOIN names n USING (category, product_code)
+                        JOIN stage_category_popularity c USING (category)
+                    )
+                    SELECT category, product_code, product_name, product_type, recent_buyers,
+                           product_score, product_rank
+                    FROM ranked
+                    WHERE product_rank <= {TOP_PRODUCTS_PER_CATEGORY}
+                """)
+                for name in ("category_top_products", "example_customers", "customer_categories",
+                             "category_popularity", "customers"):
                     con.execute(f"DELETE FROM gold.{name}")
                 for name, key in (
                     ("customers", "target.customer_id = source.customer_id"),
                     ("customer_categories", "target.customer_id = source.customer_id AND target.category = source.category"),
                     ("category_popularity", "target.category = source.category"),
                     ("example_customers", "target.customer_id = source.customer_id"),
+                    ("category_top_products",
+                     "target.category = source.category AND target.product_code = source.product_code"),
                 ):
                     con.execute(f"""
                         MERGE INTO gold.{name} AS target

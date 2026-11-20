@@ -23,6 +23,16 @@ public sealed class FakeRecommendationRepository : IRecommendationRepository
         new("Swimwear", 0.45),
     ];
 
+    // Deliberately not sorted by rank, so the tests prove that the service sorts. Product codes keep their leading zero.
+    public static readonly IReadOnlyList<TopProduct> TopProducts =
+    [
+        new("Shoes", "0901330", "Zola boot", "Boots", 1.0, 1),
+        new("Shoes", "0898886", "Joyce high shaft", "Boots", 0.8, 3),
+        new("Shoes", "0916256", "Patsy Platform", "Boots", 0.9, 2),
+        new("Garment Lower body", "0706016", "Jade HW Skinny", "Trousers", 1.0, 1),
+        new("Garment Upper body", "0372860", "7p Basic Shaftless", "Sweater", 1.0, 1),
+    ];
+
     private static readonly Dictionary<string, string[]> PurchasedByCustomer = new()
     {
         [CustomerWithHistory] = ["Garment Upper body", "Accessories"],
@@ -38,6 +48,9 @@ public sealed class FakeRecommendationRepository : IRecommendationRepository
 
     public Task<IReadOnlyList<string>> GetPurchasedCategoriesAsync(string customerId, CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<string>>(PurchasedByCustomer.GetValueOrDefault(customerId, []));
+
+    public Task<IReadOnlyList<TopProduct>> GetTopProductsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(TopProducts);
 
     public Task<IReadOnlyList<ExampleCustomer>> GetExampleCustomersAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<ExampleCustomer>>(
@@ -59,6 +72,9 @@ public sealed class UnavailableRecommendationRepository : IRecommendationReposit
         => throw new FakeDatabaseException();
 
     public Task<IReadOnlyList<string>> GetPurchasedCategoriesAsync(string customerId, CancellationToken cancellationToken = default)
+        => throw new FakeDatabaseException();
+
+    public Task<IReadOnlyList<TopProduct>> GetTopProductsAsync(CancellationToken cancellationToken = default)
         => throw new FakeDatabaseException();
 
     public Task<IReadOnlyList<ExampleCustomer>> GetExampleCustomersAsync(CancellationToken cancellationToken = default)
