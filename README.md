@@ -17,7 +17,7 @@ data/raw/*.csv  ->  pipeline (Python + DuckDB)  ->  data/crossselliq.duckdb  -> 
 
 - The **pipeline** runs separately and in advance. It loads the Kaggle CSV files into DuckDB and builds small Gold tables for the API.
 - The **API** only reads the Gold tables, in read-only mode. It never runs the pipeline and never reads the full transactions.
-- The **web page** is plain HTML, CSS, and JavaScript in `src/CrossSellIQ.Api/wwwroot`, served by the API. Its footer links to a Privacy Policy (`privacy.html`) and Terms and Conditions (`terms.html`); both are drafts with the missing details marked.
+- The **web page** is plain HTML, CSS, and JavaScript in `src/CrossSellIQ.Api/wwwroot`, served by the API. Its footer links to a Privacy Policy (`privacy.html`) and Terms and Conditions (`terms.html`). Both describe the application as it works today and state that they have not been reviewed by a legal expert.
 
 In the cloud, the API runs on Azure Container Apps. The pipeline still runs locally; only a small copy of the Gold tables is uploaded to private Azure storage, which the container mounts read-only. Every merge to `main` builds, tests, publishes, and deploys the API automatically. See [docs/deployment.md](docs/deployment.md) for the architecture, the CI/CD flow, costs, and the Azure setup.
 
