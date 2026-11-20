@@ -215,6 +215,13 @@ def check_gold(con):
                     ) b USING (customer_id)
                     WHERE c.customer_id IS NULL
                        OR e.purchased_category_count <> coalesce(b.category_count, 0)""") == 0)
+    check("top products belong to a recommendable category",
+          scalar("SELECT count(*) FROM gold.category_top_products ANTI JOIN gold.category_popularity USING (category)") == 0)
+    check("top products have valid scores and ranks",
+          scalar("""SELECT count(*) FROM gold.category_top_products
+                    WHERE recent_buyers <= 0 OR product_score <= 0 OR product_score > 1
+                       OR product_rank < 1 OR product_rank > 5""") == 0
+          and scalar("SELECT count(*) FROM gold.category_top_products") > 0)
     check("Gold source log matches Silver",
           scalar("""SELECT count(*) FROM (
                       (SELECT file_name, table_name, processed_at, row_count FROM silver.load_log

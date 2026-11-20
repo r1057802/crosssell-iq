@@ -14,5 +14,7 @@ public interface IRecommendationRepository
 
     Task<IReadOnlyList<string>> GetPurchasedCategoriesAsync(string customerId, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<TopProduct>> GetTopProductsAsync(CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ExampleCustomer>> GetExampleCustomersAsync(CancellationToken cancellationToken = default);
 }

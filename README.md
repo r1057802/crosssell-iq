@@ -167,6 +167,7 @@ The tests use an in-memory fake repository instead of the database, so they also
 - an unknown customer returns `404`, and invalid input returns `400`;
 - categories the customer already bought are never recommended;
 - recommendations are sorted by score;
+- products belong to their category and are sorted by rank;
 - an unavailable database returns `503` without internal details.
 
 ## API
@@ -188,13 +189,31 @@ Example: `GET /api/recommendations/0000423b00ade91418cceaf3b26c6af3dd342b51fd051
 {
   "customerId": "0000423b00ade91418cceaf3b26c6af3dd342b51fd051eec9c12fb36984420fa",
   "recommendations": [
-    { "category": "Socks & Tights", "score": 0.2445, "reason": "Popular category this customer has not bought before" },
-    { "category": "Nightwear", "score": 0.1553, "reason": "Popular category this customer has not bought before" }
+    {
+      "category": "Socks & Tights",
+      "score": 0.2445,
+      "reason": "Popular category this customer has not bought before",
+      "products": [
+        { "productCode": "0372860", "name": "7p Basic Shaftless", "type": "Socks", "score": 1 },
+        { "productCode": "0683001", "name": "Pattern 7p Socks", "type": "Socks", "score": 0.3759 }
+      ]
+    },
+    {
+      "category": "Nightwear",
+      "score": 0.1553,
+      "reason": "Popular category this customer has not bought before",
+      "products": [
+        { "productCode": "0536139", "name": "Alex Jogger (J)", "type": "Pyjama bottom", "score": 1 },
+        { "productCode": "0785034", "name": "Birdie LL PJ (J)", "type": "Pyjama set", "score": 0.3926 }
+      ]
+    }
   ],
   "purchasedCategories": ["Accessories", "Garment Full body", "Garment Lower body", "Garment Upper body", "Shoes", "Swimwear", "Underwear"],
   "message": null
 }
 ```
+
+The example shows two products per category for brevity; the API returns up to five.
 
 | Situation | Status | Response |
 |---|---|---|
@@ -229,6 +248,18 @@ Two data rules affect the result:
 
 - The `Unknown` product group is never recommended and does not count as a purchased category. 506 customers only bought `Unknown` articles; like the 9,699 customers who never bought anything, they have no recommendable purchase history and get the most popular categories.
 - Very small categories (for example `Fun`, with 5 buyers) stay recommendable, but their score is close to 0, so they always rank last.
+
+### Top products per category
+
+The recommendation works in two steps: first the categories above, then the products inside each recommended category. The products come from `gold.category_top_products`:
+
+- A product is a `product_code`, so all colours of one item count as one product.
+- Only purchases from the last 28 days of the data count, because fashion is seasonal and older products may no longer be sold.
+- Per category, the five products with the most distinct buyers are kept. The product `score` is the number of buyers divided by the number of buyers of the top product in that category (0 to 1).
+- Because the category is new to the customer, the customer cannot have bought any of these products before, so no per-customer product table is needed.
+- A category without purchases in the last 28 days (for example `Furniture`) has an empty `products` list. Small categories can have fewer than five products.
+
+Like the category score, the product score shows popularity. It is **not** a purchase probability.
 
 ## Configuration
 

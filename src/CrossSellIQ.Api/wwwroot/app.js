@@ -65,6 +65,36 @@ function showError(title, detail) {
     show(resultsContent, false);
 }
 
+// Step 2 of a recommendation: the most bought products inside the category, in a collapsible list.
+function renderProducts(products) {
+    if (products.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "products-empty";
+        empty.textContent = "No purchases in this category in the last 28 days.";
+        return empty;
+    }
+
+    const details = document.createElement("details");
+    details.className = "products";
+    const summary = document.createElement("summary");
+    summary.textContent = products.length === 1 ? "1 top product" : `${products.length} top products`;
+
+    const list = document.createElement("ol");
+    for (const product of products) {
+        const item = document.createElement("li");
+        const name = document.createElement("span");
+        name.textContent = product.name;
+        const meta = document.createElement("span");
+        meta.className = "product-meta";
+        meta.textContent = `${product.type}, product ${product.productCode}, score ${product.score.toFixed(2)}`;
+        item.append(name, meta);
+        list.append(item);
+    }
+
+    details.append(summary, list);
+    return details;
+}
+
 function renderRecommendations(data) {
     resultCustomer.textContent = data.customerId;
 
@@ -92,7 +122,9 @@ function renderRecommendations(data) {
         rank.textContent = String(index + 1);
 
         const category = document.createElement("td");
-        category.textContent = recommendation.category;
+        const categoryName = document.createElement("span");
+        categoryName.textContent = recommendation.category;
+        category.append(categoryName, renderProducts(recommendation.products));
 
         const score = document.createElement("td");
         const scoreWrapper = document.createElement("div");
